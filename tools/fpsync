@@ -56,7 +56,7 @@ OPT_TMPDIR="/tmp/fpsync"
 # Job name for resume mode (-r)
 OPT_JOBNAME=""
 # Rsync options (-o)
-OPT_RSYNC="-lptgoD -v --numeric-ids"
+OPT_RSYNC="-lptgoD -v --numeric-ids --xattrs --ignore-errors"
 # Fpart options (-O)
 OPT_FPART="-x .zfs -x .snapshot* -x .ckpt"
 # Sudo mode (-S)
@@ -98,6 +98,7 @@ usage () {
     echo "              (options -f, -s, -o, /src_dir/ and /dst_url/"
     echo "              are ignored when resuming a previous run)"
     echo "  -o options  override default rsync options with <options>"
+    echo "  -e options  extend default rsync options with <options>"
     echo "              Use this option with care as certain options are"
     echo "              incompatible with a parallel usage (e.g. --delete)"
     echo "  -O options  override default fpart options with <options>"
@@ -217,6 +218,14 @@ parse_opts () {
             if [ -n "${OPTARG}" ]
             then
                 OPT_RSYNC="${OPTARG}"
+            else
+                end_die "Invalid rsync options supplied"
+            fi
+            ;;
+        "e")
+            if [ -n "${OPTARG}" ]
+            then
+                OPT_RSYNC="${OPT_RSYNC} ${OPTARG}"
             else
                 end_die "Invalid rsync options supplied"
             fi
