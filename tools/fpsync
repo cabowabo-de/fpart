@@ -152,7 +152,7 @@ is_num () {
 parse_opts () {
     local opt OPTARG OPTIND
 
-    while getopts "n:f:s:Ew:d:t:r:o:O:Svh" opt
+    while getopts "n:f:s:Ew:d:t:r:o:e:O:Svh" opt
     do
         case "${opt}" in
         "n")
