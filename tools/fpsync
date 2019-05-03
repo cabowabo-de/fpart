@@ -30,7 +30,16 @@
 # This migration is incremental and will need a final rsync pass
 # (rsync -av -delete src_dir/ dst_url/) to remove extra files from dst_url/.
 
-FPSYNC_VERSION="1.1.0"
+# 1.0.0cbc  2017
+#           Erweiterung um Option -e (extend default rsync options with <options>)
+# 1.1.1cbc  04/2019
+#           Erweiterung um Optioon -B Bandwith Limitation in KB
+#           Erweiterung um Optioon -B Check Command. Dieses Kommando wird vor jedem 
+#           Rsync ausgeführt. Nur bei Rückgabewert 0 wird der nachfolgende Sync
+#           ausgeführt.
+#           Erweiterung um Option -x Exclude, kann mehrfach angegeben werden
+
+FPSYNC_VERSION="1.1.1cbc"
 
 ########## Default values for options
 
@@ -67,6 +76,10 @@ OPT_VERBOSE="0"
 OPT_SRCDIR=""
 # Destination directory
 OPT_DSTURL=""
+# PRE rsync Check 
+OPT_CHECK=true
+# Bandwith
+OPT_BW=""
 
 # Mail - Uncomment to receive a mail when the whole run has finished.
 # The master machine (the one running this script) must be able to send mail
@@ -102,6 +115,10 @@ usage () {
     echo "              Use this option with care as certain options are"
     echo "              incompatible with a parallel usage (e.g. --delete)"
     echo "  -O options  override default fpart options with <options>"
+    echo "  -C cmdname  a pre rsync check command. On return 0 rsync starts"
+    echo "  -B limit    Bandwith Limitation in KB"
+    echo "  -x exclude  items to exclude"
+    echo "              This option can be be specified several times"
     echo "  -S          use sudo for filesystem crawling and synchronizations"
     echo "  -v          verbose mode (default: quiet)"
     echo "              This option can be be specified several times to"
@@ -152,7 +169,7 @@ is_num () {
 parse_opts () {
     local opt OPTARG OPTIND
 
-    while getopts "n:f:s:Ew:d:t:r:o:e:O:Svh" opt
+    while getopts "n:f:s:Ew:d:t:r:o:e:O:C:B:x:Svh" opt
     do
         case "${opt}" in
         "n")
@@ -236,6 +253,30 @@ parse_opts () {
                 OPT_FPART="${OPTARG}"
             else
                 end_die "Invalid fpart options supplied"
+            fi
+            ;;
+        "C")
+            if [ -n "${OPTARG}" ]
+            then
+                OPT_CHECK="${OPTARG}"
+            else
+                end_die "Invalid fpart options supplied"
+            fi
+            ;;
+        "B")
+            if [ -n "${OPTARG}" ]
+            then
+                OPT_RSYNC="${OPT_RSYNC} --bwlimit=${OPTARG}"
+            else
+                end_die "Invalid fpart options supplied"
+            fi
+            ;;
+        "x")
+            if [ -n "${OPTARG}" ]
+            then
+                OPT_RSYNC="${OPT_RSYNC} --exclude '"${OPTARG}"'"
+            else
+                end_die "Invalid rsync options supplied"
             fi
             ;;
         "S")
@@ -627,7 +668,8 @@ else
 fi
 
 # Fpart hooks (black magic is here !)
-FPART_JOBCOMMAND="/bin/sh -c '${SUDO} ${RSYNC_BIN} ${OPT_RSYNC} \
+FPART_JOBCOMMAND="/bin/sh -c '${OPT_CHECK} \\\"${OPT_SRCDIR}/\\\" && \
+    ${SUDO} ${RSYNC_BIN} ${OPT_RSYNC} \
     ${RSYNC_MODEOPTS} --files-from=\\\"\${FPART_PARTFILENAME}\\\" --from0 \
     \\\"${OPT_SRCDIR}/\\\" \
     \\\"${OPT_DSTURL}/\\\"' \
