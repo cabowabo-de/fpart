@@ -34,7 +34,7 @@
 #           Erweiterung um Option -e (extend default rsync options with <options>)
 # 1.1.1cbc  04/2019
 #           Erweiterung um Optioon -B Bandwith Limitation in KB
-#           Erweiterung um Optioon -B Check Command. Dieses Kommando wird vor jedem 
+#           Erweiterung um Optioon -B Check Command. Dieses Kommando wird vor jedem
 #           Rsync ausgeführt. Nur bei Rückgabewert 0 wird der nachfolgende Sync
 #           ausgeführt.
 #           Erweiterung um Option -x Exclude, kann mehrfach angegeben werden
@@ -66,8 +66,6 @@ OPT_FPSHDIR=""
 OPT_TMPDIR="/tmp/fpsync"
 # Job name for resume mode (-r)
 OPT_JOBNAME=""
-# Rsync options (-o) TODO
-OPT_RSYNC="-lptgoD -v --numeric-ids --xattrs --ignore-errors"
 # User-settable tool options (-o)
 OPT_TOOL=""
 # Fpart options (-O)
@@ -80,7 +78,7 @@ OPT_VERBOSE="0"
 OPT_SRCDIR=""
 # Destination directory
 OPT_DSTURL=""
-# PRE rsync Check 
+# PRE rsync Check
 OPT_CHECK=true
 # Bandwith
 OPT_BW=""
@@ -182,7 +180,7 @@ is_size () {
 parse_opts () {
     local opt OPTARG OPTIND
 
-    while getopts "n:f:s:Ew:d:t:r:o:e:O:C:B:x:Svh" opt
+    while getopts "m:n:f:s:Ew:d:t:r:o:e:O:C:B:x:Svh" opt
     do
         case "${opt}" in
         "m")
@@ -263,7 +261,7 @@ parse_opts () {
         "e")
             if [ -n "${OPTARG}" ]
             then
-                OPT_RSYNC="${OPT_RSYNC} ${OPTARG}"
+                OPT_RSYNC="${OPT_RSYNC:-} ${OPTARG}"
             else
                 end_die "Invalid rsync options supplied"
             fi
@@ -287,7 +285,7 @@ parse_opts () {
         "B")
             if [ -n "${OPTARG}" ]
             then
-                OPT_RSYNC="${OPT_RSYNC} --bwlimit=${OPTARG}"
+                OPT_RSYNC="${OPT_RSYNC:-} --bwlimit=${OPTARG}"
             else
                 end_die "Invalid fpart options supplied"
             fi
@@ -295,7 +293,7 @@ parse_opts () {
         "x")
             if [ -n "${OPTARG}" ]
             then
-                OPT_RSYNC="${OPT_RSYNC} --exclude '"${OPTARG}"'"
+                OPT_RSYNC="${OPT_RSYNC:-} --exclude '"${OPTARG}"'"
             else
                 end_die "Invalid rsync options supplied"
             fi
@@ -367,11 +365,13 @@ parse_opts () {
     "cpio")
         [ "${OPT_DIRSONLY}" = "yes" ] && \
             end_die "Option -E is invalid when using cpio"
+        [ "${OPT_RSYNC:-#}" != "#" ] && \
+            end_die "Option -e -B and -x are invalid when using cpio"
         ;;
     *)
         # Rsync
         [ -z "${OPT_TOOL}" ] && \
-            OPT_TOOL="-lptgoD -v --numeric-ids"
+            OPT_TOOL="-lptgoD -v --numeric-ids --xattrs --ignore-errors ${OPT_RSYNC}"
         ;;
     esac
 
