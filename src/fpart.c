@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2011-2018 Ganael LAPLANCHE <ganael.laplanche@martymac.org>
+ * Copyright (c) 2011-2020 Ganael LAPLANCHE <ganael.laplanche@martymac.org>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,6 +35,10 @@
 /* NULL, exit(3) */
 #include <stdlib.h>
 
+/* strtoumax(3) */
+#include <limits.h>
+#include <inttypes.h>
+
 /* fprintf(3), fopen(3), fclose(3), fgets(3), foef(3) */
 #include <stdio.h>
 
@@ -61,7 +65,7 @@ static void
 version(void)
 {
     fprintf(stderr, "fpart v" FPART_VERSION "\n"
-        "Copyright (c) 2011-2018 "
+        "Copyright (c) 2011-2020 "
         "Ganael LAPLANCHE <ganael.laplanche@martymac.org>\n"
         "WWW: http://contribs.martymac.org\n");
     fprintf(stderr, "Build options: debug=");
@@ -124,10 +128,10 @@ usage(void)
 #endif
     fprintf(stderr, "\n");
     fprintf(stderr, "Directory handling:\n");
-    fprintf(stderr, "  -z\tpack empty directories "
+    fprintf(stderr, "  -z\tpack empty directories too "
         "(default: pack files only)\n");
-    fprintf(stderr, "  -Z\ttreat un-readable directories as empty "
-        "(implies -z)\n");
+    fprintf(stderr, "  -zz\ttreat un-readable directories as empty\n");
+    fprintf(stderr, "  -zzz\tpack all directories (as empty)\n");
     fprintf(stderr, "  -d\tpack directories instead of files after a certain "
         "<depth>\n");
     fprintf(stderr, "  -D\tpack leaf directories (i.e. containing files only, "
@@ -177,7 +181,7 @@ handle_argument(char *argument, fnum_t *totalfiles, struct file_entry **head,
             return (1);
         )
 
-        if(sscanf(argument, "%lld %[^\n]", &input_size, input_path) == 2) {
+        if(sscanf(argument, "%ju %[^\n]", &input_size, input_path) == 2) {
             if(handle_file_entry(head, input_path, input_size, options) == 0)
                 (*totalfiles)++;
             else {
@@ -256,9 +260,9 @@ handle_options(struct program_options *options, int *argcp, char ***argvp)
     int ch;
     while((ch = getopt(*argcp, *argvp,
 #if defined(_HAS_FNM_CASEFOLD)
-        "?hVn:f:s:i:ao:0evlby:Y:x:X:zZd:DELw:W:p:q:r:"
+        "?hVn:f:s:i:ao:0evlby:Y:x:X:zd:DELw:W:p:q:r:"
 #else
-        "?hVn:f:s:i:ao:0evlby:x:zZd:DELw:W:p:q:r:"
+        "?hVn:f:s:i:ao:0evlby:x:zd:DELw:W:p:q:r:"
 #endif
         )) != -1) {
         switch(ch) {
@@ -269,35 +273,37 @@ handle_options(struct program_options *options, int *argcp, char ***argvp)
                 return (FPART_OPTS_VERSION | FPART_OPTS_OK | FPART_OPTS_EXIT);
             case 'n':
             {
-                char *endptr = NULL;
-                long num_parts = strtol(optarg, &endptr, 10);
-                /* refuse values <= 0 and partially-converted arguments */
-                if((endptr == optarg) || (*endptr != '\0') || (num_parts <= 0))
+                uintmax_t num_parts = str_to_uintmax(optarg, 0);
+                if(num_parts == 0) {
+                    fprintf(stderr,
+                        "Option -n requires a value greater than 0.\n");
                     return (FPART_OPTS_USAGE |
                         FPART_OPTS_NOK | FPART_OPTS_EXIT);
+                }
                 options->num_parts = (pnum_t)num_parts;
                 break;
             }
             case 'f':
             {
-                char *endptr = NULL;
-                long long max_entries = strtoll(optarg, &endptr, 10);
-                /* refuse values <= 0 and partially-converted arguments */
-                if((endptr == optarg) || (*endptr != '\0') ||
-                    (max_entries <= 0))
+                uintmax_t max_entries = str_to_uintmax(optarg, 0);
+                if(max_entries == 0) {
+                    fprintf(stderr,
+                        "Option -f requires a value greater than 0.\n");
                     return (FPART_OPTS_USAGE |
                         FPART_OPTS_NOK | FPART_OPTS_EXIT);
+                }
                 options->max_entries = (fnum_t)max_entries;
                 break;
             }
             case 's':
             {
-                char *endptr = NULL;
-                long long max_size = strtoll(optarg, &endptr, 10);
-                /* refuse values <= 0 and partially-converted arguments */
-                if((endptr == optarg) || (*endptr != '\0') || (max_size <= 0))
+                uintmax_t max_size = str_to_uintmax(optarg, 1);
+                if(max_size == 0) {
+                    fprintf(stderr,
+                        "Option -s requires a value greater than 0.\n");
                     return (FPART_OPTS_USAGE |
                         FPART_OPTS_NOK | FPART_OPTS_EXIT);
+                }
                 options->max_size = (fsize_t)max_size;
                 break;
             }
@@ -390,11 +396,7 @@ handle_options(struct program_options *options, int *argcp, char ***argvp)
                 break;
             }
             case 'z':
-                options->empty_dirs = OPT_EMPTYDIRS;
-                break;
-            case 'Z':
-                options->dnr_empty = OPT_DNREMPTY;
-                options->empty_dirs = OPT_EMPTYDIRS;
+                options->dirs_include++;
                 break;
             case 'd':
             {
@@ -409,12 +411,10 @@ handle_options(struct program_options *options, int *argcp, char ***argvp)
             }
             case 'D':
                 options->leaf_dirs = OPT_LEAFDIRS;
-                options->empty_dirs = OPT_EMPTYDIRS;
                 break;
             case 'E':
                 options->dirs_only = OPT_DIRSONLY;
                 options->leaf_dirs = OPT_LEAFDIRS;
-                options->empty_dirs = OPT_EMPTYDIRS;
                 break;
             case 'L':
                 options->live_mode = OPT_LIVEMODE;
@@ -451,11 +451,8 @@ handle_options(struct program_options *options, int *argcp, char ***argvp)
             }
             case 'p':
             {
-                char *endptr = NULL;
-                long long preload_size = strtoll(optarg, &endptr, 10);
-                /* refuse values <= 0 and partially-converted arguments */
-                if((endptr == optarg) || (*endptr != '\0') ||
-                    (preload_size <= 0)) {
+                uintmax_t preload_size = str_to_uintmax(optarg, 1);
+                if(preload_size == 0) {
                     fprintf(stderr,
                         "Option -p requires a value greater than 0.\n");
                     return (FPART_OPTS_USAGE |
@@ -466,11 +463,8 @@ handle_options(struct program_options *options, int *argcp, char ***argvp)
             }
             case 'q':
             {
-                char *endptr = NULL;
-                long long overload_size = strtoll(optarg, &endptr, 10);
-                /* refuse values <= 0 and partially-converted arguments */
-                if((endptr == optarg) || (*endptr != '\0') ||
-                    (overload_size <= 0)) {
+                uintmax_t overload_size = str_to_uintmax(optarg, 1);
+                if(overload_size == 0) {
                     fprintf(stderr,
                         "Option -q requires a value greater than 0.\n");
                     return (FPART_OPTS_USAGE |
@@ -481,11 +475,8 @@ handle_options(struct program_options *options, int *argcp, char ***argvp)
             }
             case 'r':
             {
-                char *endptr = NULL;
-                long long round_size = strtoll(optarg, &endptr, 10);
-                /* refuse values <= 1 and partially-converted arguments */
-                if((endptr == optarg) || (*endptr != '\0') ||
-                    (round_size <= 1)) {
+                uintmax_t round_size = str_to_uintmax(optarg, 1);
+                if(round_size <= 1) {
                     fprintf(stderr,
                         "Option -r requires a value greater than 1.\n");
                     return (FPART_OPTS_USAGE |
@@ -524,8 +515,7 @@ handle_options(struct program_options *options, int *argcp, char ***argvp)
             (options->include_files_ci != NULL) ||
             (options->exclude_files != NULL) ||
             (options->exclude_files_ci != NULL) ||
-            (options->empty_dirs != DFLT_OPT_EMPTYDIRS) ||
-            (options->dnr_empty != DFLT_OPT_DNREMPTY) ||
+            (options->dirs_include != DFLT_OPT_DIRSINCLUDE) ||
             (options->dir_depth != DFLT_OPT_DIR_DEPTH) ||
             (options->leaf_dirs != DFLT_OPT_LEAFDIRS) ||
             (options->dirs_only != DFLT_OPT_DIRSONLY)) {
@@ -551,6 +541,10 @@ handle_options(struct program_options *options, int *argcp, char ***argvp)
             "Option -E is incompatible with option -d.\n");
         return (FPART_OPTS_USAGE | FPART_OPTS_NOK | FPART_OPTS_EXIT);
     }
+
+    /* Options -D and -E imply empty dirs request (option -z) */
+    if(options->leaf_dirs == OPT_LEAFDIRS)
+        options->dirs_include = max(options->dirs_include, OPT_EMPTYDIRS);
 
     if((options->live_mode == OPT_NOLIVEMODE) &&
         ((options->pre_part_hook != NULL) ||
@@ -680,18 +674,18 @@ int main(int argc, char **argv)
     rewind_list(head);
 
     /* no file found or live mode */
-    if((totalfiles <= 0) || (options.live_mode == OPT_LIVEMODE)) {
+    if((totalfiles == 0) || (options.live_mode == OPT_LIVEMODE)) {
         uninit_file_entries(head, &options);
         /* display status */
         if(options.verbose >= OPT_VERBOSE)
-            fprintf(stderr, "%lld file(s) found.\n", totalfiles);
+            fprintf(stderr, "%ju file(s) found.\n", totalfiles);
         uninit_options(&options);
         exit(EXIT_SUCCESS);
     }
 
     /* display status */
     if(options.verbose >= OPT_VERBOSE) {
-        fprintf(stderr, "%lld file(s) found.\n", totalfiles);
+        fprintf(stderr, "%ju file(s) found.\n", totalfiles);
         fprintf(stderr, "Sorting entries...\n");
     }
 

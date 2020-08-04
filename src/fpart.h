@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2011-2018 Ganael LAPLANCHE <ganael.laplanche@martymac.org>
+ * Copyright (c) 2011-2020 Ganael LAPLANCHE <ganael.laplanche@martymac.org>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -27,7 +27,7 @@
 #ifndef _FPART_H
 #define _FPART_H
 
-#define FPART_VERSION "1.1.0"
+#define FPART_VERSION "1.2.1"
 
 /* maximum input line length, including '\n' and '\0' */
 #define MAX_LINE_LENGTH 2048

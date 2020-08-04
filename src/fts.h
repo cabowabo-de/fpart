@@ -1,4 +1,6 @@
-/*
+/*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 1989, 1993
  *	The Regents of the University of California.  All rights reserved.
  *
@@ -27,7 +29,7 @@
  * SUCH DAMAGE.
  *
  *	@(#)fts.h	8.3 (Berkeley) 8/14/94
- * $FreeBSD: head/include/fts.h 250887 2013-05-21 21:20:10Z ed $
+ * $FreeBSD: head/include/fts.h 326024 2017-11-20 19:45:28Z pfg $
  */
 
 #ifndef	_FTS_H_
@@ -55,13 +57,15 @@
 #else
 #if defined(__linux__)
 #include <glob.h>
-#else
-#define __dev_t dev_t
-#define __size_t size_t
-#define __ino_t ino_t
-#define __nlink_t nlink_t
-#endif
-#endif
+#include <features.h>
+#endif /* defined(__linux__) */
+#if !defined(__GLIBC__)
+typedef dev_t __dev_t;
+typedef size_t __size_t;
+typedef ino_t __ino_t;
+typedef nlink_t __nlink_t;
+#endif /* !defined(__GLIBC__) */
+#endif /* defined(__FreeBSD__) */
 
 typedef struct {
 	struct _ftsent *fts_cur;	/* current node */

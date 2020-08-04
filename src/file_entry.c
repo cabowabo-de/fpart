@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2011-2018 Ganael LAPLANCHE <ganael.laplanche@martymac.org>
+ * Copyright (c) 2011-2020 Ganael LAPLANCHE <ganael.laplanche@martymac.org>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -168,7 +168,7 @@ fpart_hook(const char *cmd, const struct program_options *options,
         assert(live_num_files != NULL);
 
         if(options->verbose >= OPT_VERBOSE)
-            fprintf(stderr, "Executing pre-part #%d hook: '%s'\n",
+            fprintf(stderr, "Executing pre-part #%ju hook: '%s'\n",
                 *live_partition_index, cmd);
 
         /* FPART_HOOKTYPE (pre-part) */
@@ -191,7 +191,7 @@ fpart_hook(const char *cmd, const struct program_options *options,
         assert(live_num_files != NULL);
 
         if(options->verbose >= OPT_VERBOSE)
-            fprintf(stderr, "Executing post-part #%d hook: '%s'\n",
+            fprintf(stderr, "Executing post-part #%ju hook: '%s'\n",
                 *live_partition_index, cmd);
 
         /* FPART_HOOKTYPE (post-part) */
@@ -233,7 +233,7 @@ fpart_hook(const char *cmd, const struct program_options *options,
             retval = 1;
             goto cleanup;
         )
-        snprintf(env_fpart_partnumber_string, malloc_size, "%s=%d",
+        snprintf(env_fpart_partnumber_string, malloc_size, "%s=%ju",
             env_fpart_partnumber_name, *live_partition_index);
         if(push_env(env_fpart_partnumber_string, &envp) != 0) {
             retval = 1;
@@ -249,7 +249,7 @@ fpart_hook(const char *cmd, const struct program_options *options,
             retval = 1;
             goto cleanup;
         )
-        snprintf(env_fpart_partsize_string, malloc_size, "%s=%lld",
+        snprintf(env_fpart_partsize_string, malloc_size, "%s=%ju",
             env_fpart_partsize_name, *live_partition_size);
         if(push_env(env_fpart_partsize_string, &envp) != 0) {
             retval = 1;
@@ -265,7 +265,7 @@ fpart_hook(const char *cmd, const struct program_options *options,
             retval = 1;
             goto cleanup;
         )
-        snprintf(env_fpart_partnumfiles_string, malloc_size, "%s=%llu",
+        snprintf(env_fpart_partnumfiles_string, malloc_size, "%s=%ju",
             env_fpart_partnumfiles_name, *live_num_files);
         if(push_env(env_fpart_partnumfiles_string, &envp) != 0) {
             retval = 1;
@@ -408,7 +408,7 @@ live_print_file_entry(char *path, fsize_t size,
             if_not_malloc(live_status.filename, malloc_size,
                 return (1);
             )
-            snprintf(live_status.filename, malloc_size, "%s.%d", out_template,
+            snprintf(live_status.filename, malloc_size, "%s.%ju", out_template,
                 live_status.partition_index);
         }
 
@@ -440,7 +440,7 @@ live_print_file_entry(char *path, fsize_t size,
 
     if(out_template == NULL) {
         /* no template provided, just print to stdout */
-        fprintf(stdout, "%d (%lld): %s\n", live_status.partition_index, size,
+        fprintf(stdout, "%ju (%ju): %s\n", live_status.partition_index, size,
             path);
     }
     else {
@@ -466,7 +466,7 @@ live_print_file_entry(char *path, fsize_t size,
             (live_status.partition_size >= options->max_size))) {
         /* display added partition */
         if(options->verbose >= OPT_VERBOSE)
-            fprintf(stderr, "Filled part #%d: size = %lld, %lld file(s)\n",
+            fprintf(stderr, "Filled part #%ju: size = %ju, %ju file(s)\n",
                 live_status.partition_index, live_status.partition_size,
                 live_status.partition_num_files);
 
@@ -559,7 +559,7 @@ add_file_entry(struct file_entry **head, char *path, fsize_t size,
 }
 
 /* Compare entries to list directories first
-   - compar() function used by fts_open() when in leaf_dirs mode */
+   - compar() function used by fts_open() when in dirs_only or leaf_dirs mode */
 static int
 #if (defined(__linux__) || defined(__NetBSD__)) && !defined(EMBED_FTS)
 fts_dirsfirst(const FTSENT **a, const FTSENT **b)
@@ -656,9 +656,9 @@ init_file_entries(char *file_path, struct file_entry **head, fnum_t *count,
             {
                 fprintf(stderr, "%s: %s\n", p->fts_path,
                     strerror(p->fts_errno));
-                /* if requested by the -Z option,
+                /* if requested by the -zz option,
                    add directory anyway by simulating FTS_DP */
-                if(options->dnr_empty == OPT_DNREMPTY) {
+                if(options->dirs_include >= OPT_DNREMPTY) {
                     curdir_empty = 1;
                     goto add_directory;
                 }
@@ -685,11 +685,20 @@ init_file_entries(char *file_path, struct file_entry **head, fnum_t *count,
 add_directory:
                 /* if dirs_only mode activated or
                    leaf_dirs mode activated and current directory is a leaf or
-                   empty_dirs display requested and current dir is empty */
+                   at least empty dirs display requested and current dir is empty */
                 if((options->dirs_only == OPT_DIRSONLY) ||
                     ((options->leaf_dirs == OPT_LEAFDIRS) && (!curdir_dirsfound)) ||
-                    ((options->empty_dirs == OPT_EMPTYDIRS) && curdir_empty))
+                    ((options->dirs_include >= OPT_EMPTYDIRS) && curdir_empty))
                     curdir_addme = 1;
+
+                /* if current directory has not been added by previous rules
+                   but we request all directory entries, we fake an empty dir
+                   to avoid a call to get_size() below as we want it with a
+                   size of 0 */
+                if((!curdir_addme) && (options->dirs_include >= OPT_ALLDIRS)) {
+                    curdir_addme = 1;
+                    curdir_empty = 1;
+                }
 
                 /* add directory if necessary */
                 if(curdir_addme) {
@@ -697,7 +706,7 @@ add_directory:
 
                     /* check for name validity regarding include/exclude
                        options */
-                    if(!valid_filename(p->fts_name, options, 1)) {
+                    if(!valid_file(p, options, 1)) {
                         if(options->verbose >= OPT_VERBOSE)
                             fprintf(stderr, "Skipping directory: '%s'\n",
                                 p->fts_path);
@@ -722,7 +731,7 @@ add_directory:
                         snprintf(curdir_entry_path, malloc_size, "%s",
                             p->fts_path);
 
-                    /* compute current dir size */
+                    /* adapt curdir_size for special cases */
                     if((p->fts_level > 0) &&
                         (options->cross_fs_boundaries == OPT_NOCROSSFSBOUNDARIES) &&
                         (p->fts_parent->fts_statp->st_dev != p->fts_statp->st_dev))
@@ -730,11 +739,20 @@ add_directory:
                            (non-root) directories */
                         curdir_size = 0;
                     else if(curdir_empty)
+                        /* we know that the current dir is empty (or that we
+                           fake an empty one), ensure curdir_size is 0 */
                         curdir_size = 0;
-                    else if(options->dirs_only == OPT_NODIRSONLY)
+                    else if((options->dirs_only != OPT_DIRSONLY) &&
+                            ((options->leaf_dirs != OPT_LEAFDIRS) || (curdir_dirsfound)))
+                        /* when dirs_only mode activated or
+                           leaf_dirs mode activated and current directory is a
+                           leaf, then we can use curdir_size.
+                           In all other cases (e.g. when dir_depth requested and
+                           reached), we must compute the directory size
+                           recursively. */
                         curdir_size =
                             get_size(p->fts_accpath, p->fts_statp, options);
-                    /* else leave curdir_size untouched */
+                    /* else, trust curdir_size and leave it untouched */
 
                     /* add or display it */
                     if(handle_file_entry
@@ -768,7 +786,7 @@ reset_directory:
                 curdir_dirsfound = 0; /* no dirs found yet */
 
                 /* check for name validity regarding exclude options */
-                if(!valid_filename(p->fts_name, options, 0)) {
+                if(!valid_file(p, options, 0)) {
                     if(options->verbose >= OPT_VERBOSE)
                         fprintf(stderr, "Skipping directory: '%s'\n",
                             p->fts_path);
@@ -794,12 +812,20 @@ reset_directory:
             /* XXX default means remaining file types:
                FTS_F, FTS_SL, FTS_SLNONE, FTS_DEFAULT */
             {
+                fsize_t curfile_size = 0;
+
+                /* check for name validity regarding include/exclude options */
+                if(!valid_file(p, options, 1)) {
+                    if(options->verbose >= OPT_VERBOSE)
+                        fprintf(stderr, "Skipping file: '%s'\n", p->fts_path);
+                    continue;
+                }
+
                 /* get current file size and add it to our current directory
                    size. We must have visited all directories first for that
                    total to be right ; this is achieved by using a compar()
                    function with fts_open() */
-                fsize_t curfile_size =
-                    get_size(p->fts_accpath, p->fts_statp, options);
+                curfile_size = get_size(p->fts_accpath, p->fts_statp, options);
 
                 curdir_empty = 0; /* mark current dir as non empty */
                 curdir_size += curfile_size;
@@ -814,13 +840,6 @@ reset_directory:
                     ((options->dirs_only == OPT_DIRSONLY) ||
                     ((options->leaf_dirs == OPT_LEAFDIRS) && (!curdir_dirsfound))))
                     continue;
-
-                /* check for name validity regarding include/exclude options */
-                if(!valid_filename(p->fts_name, options, 1)) {
-                    if(options->verbose >= OPT_VERBOSE)
-                        fprintf(stderr, "Skipping file: '%s'\n", p->fts_path);
-                    continue;
-                }
 
                 /* add or display it */
                 if(handle_file_entry
@@ -874,7 +893,7 @@ uninit_file_entries(struct file_entry *head, struct program_options *options)
         /* display added partition */
         if((options->verbose >= OPT_VERBOSE) &&
             (live_status.partition_num_files > 0))
-            fprintf(stderr, "Filled part #%d: size = %lld, %lld file(s)\n",
+            fprintf(stderr, "Filled part #%ju: size = %ju, %ju file(s)\n",
                 live_status.partition_index, live_status.partition_size,
                 live_status.partition_num_files);
 
@@ -923,7 +942,7 @@ print_file_entries(struct file_entry *head, pnum_t num_parts,
     /* no template provided, just print to stdout and return */
     if(out_template == NULL) {
         while(head != NULL) {
-            fprintf(stdout, "%d (%lld): %s\n", head->partition_index,
+            fprintf(stdout, "%ju (%ju): %s\n", head->partition_index,
                 head->size, head->path);
             head = head->nextp;
         }
@@ -957,7 +976,7 @@ print_file_entries(struct file_entry *head, pnum_t num_parts,
                      close(fd[i]);
                 return (1);
             )
-            snprintf(out_filename, malloc_size, "%s.%d", out_template,
+            snprintf(out_filename, malloc_size, "%s.%ju", out_template,
                 (current_chunk * PRINT_FE_CHUNKS) + current_file_entry);
 
             if((fd[current_file_entry] =

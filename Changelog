@@ -1,8 +1,37 @@
-201?/??/??, 1.1.0 :
+2020/??/??, 1.2.1 ('Cleaning room') :
+    - fpsync: mask broken pipe errors when dequeueing jobs (fixes GH issue #22)
+2020/01/10, 1.2.0 ('Joking') :
+    - fpsync: ability to set an unlimited number of files or an unlimited size
+      per sync job (fixes GH issue #9)
+    - fpart: exclude files earlier (fixes GH issue #14)
+      Before that change, excluded files would not make a directory empty and
+      still account for its size; excluded files are now considered absent.
+      That change does not apply when a directory size is computed after
+      a certain depth (option -d) has been reached (in that case, once the
+      maximum depth has been reached, every single file accounts for a directory
+      size).
+    - fpart: allow to specify paths with options '-y', '-Y', '-x' and '-X'
+      (fixes GH issue #17)
+    - fpart: raise limits for different internal types: the size of a file or
+      partition, the number of files inside a partition and the number of
+      partitions. That will make fpart(1) ready to handle bigger filesystems.
+    - fpart: accept human-friendly size formats for options -s, -p, -q and -r
+    - fpsync: accept human-friendly size formats for option -s
+    - fpsync: use 'command' instead of 'which' to find binaries
+      (fixes GH issue #20)
+2018/11/15, 1.1.0 ('Reading') :
     - fpart: options -D and -E now pack files if they are explicitly passed as
       arguments
     - fpsync: simplify and fix detection of remote URLs (fixes GH issue #2)
     - fpsync: implement simple ETA when displaying status
+    - fts.h: portability fix for Solaris 10 and earlier (GH PR #4)
+    - fpart: fix build on Alpine Linux (GH PR #5)
+    - fpsync: add timestamps and part numbers to logs
+    - fpsync: add support for cpio copy tool (option -m)
+    - fpart: option -Z becomes option -zz (incremental -z)
+    - fpart: add option -zzz to add all directories to file lists (as empty)
+    - other: lower required autoconf version to 2.63 (GH issue #7)
+    - other: update RPM .spec file for CentOS and Feroda (GH issue #7)
 2017/11/10, 1.0.0 ('Dancing'):
     - fpart: update embedded fts(3) using FreeBSD 12-CURRENT's version
     - fpart: add option -E to pack directories instead of files

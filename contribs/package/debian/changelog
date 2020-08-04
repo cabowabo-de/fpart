@@ -1,0 +1,50 @@
+fpart (1.2.0-1) unstable; urgency=low
+
+  * New upstream release
+  * debian/control
+    - Bump Standards-Version to 4.5.0 (no changes required)
+
+ -- Ganael LAPLANCHE <ganael.laplanche@martymac.org>  Tue, 21 Jan 2020 22:18:40 +0100
+
+fpart (1.1.0-1) unstable; urgency=low
+
+  * New upstream release (closes: #881806)
+  * New package maintainer (closes: #911246, #924334)
+  * debian/control
+    - Update Vcs fields
+    - Bump Standards-Version to 4.4.0 (no changes required)
+    - Use debhelper-compat (= 12)
+    - Add cpio to Depends
+    - Remove unnecessary minimal versions from Depends
+  * debian/copyright
+    - Use machine-readable format
+  * debian/watch
+    - Switch to version 4
+    - Use https in URL
+
+ -- Ganael LAPLANCHE <ganael.laplanche@martymac.org>  Wed, 21 Aug 2019 23:41:38 +0200
+
+fpart (0.9.2-1) unstable; urgency=low
+
+  * New upstream release
+  * debian/control
+    - add sudo in Depends
+    - add dh-autoreconf in Build-Depends
+
+ -- Carl Chenet <chaica@debian.org>  Sat, 25 Apr 2015 06:21:34 +0200
+
+fpart (0.9.1-1) unstable; urgency=low
+
+  * New upstream release
+  * debian/control
+    - Bump Standards-Version to 3.9.6.1
+  * debian/manpages
+    - Added fpsync
+
+ -- Carl Chenet <chaica@debian.org>  Tue, 10 Feb 2015 18:54:43 +0100
+
+fpart (0.8-1) unstable; urgency=low
+
+  * Initial release (Closes: #708383)
+
+ -- Carl Chenet <chaica@debian.org>  Sun, 30 Jun 2013 17:15:39 +0200

@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2011-2018 Ganael LAPLANCHE <ganael.laplanche@martymac.org>
+ * Copyright (c) 2011-2020 Ganael LAPLANCHE <ganael.laplanche@martymac.org>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -27,17 +27,19 @@
 #ifndef _TYPES_H
 #define _TYPES_H
 
+#include <stdint.h>
+
 /* Handles the size of a file or partition.
-   Must be signed and longer than off_t */
-typedef long long fsize_t;
+   Must be unsigned and longer than off_t */
+typedef uintmax_t fsize_t;
 
 /* Handles the number of files in a partition
    and the number of file entries.
    Must be unsigned and longer than ino_t */
-typedef unsigned long long fnum_t;
+typedef uintmax_t fnum_t;
 
 /* Handles the number of partitions.
    Must be unsigned and can be smaller than fnum_t */
-typedef unsigned int pnum_t;
+typedef uintmax_t pnum_t;
 
 #endif /* _TYPES_H */

@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2011-2018 Ganael LAPLANCHE <ganael.laplanche@martymac.org>
+ * Copyright (c) 2011-2020 Ganael LAPLANCHE <ganael.laplanche@martymac.org>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -46,7 +46,7 @@
 #include <fts.h>
 #endif
 
-/* strerror(3) */
+/* strerror(3), strlen(3), strchr(3) */
 #include <string.h>
 
 /* errno */
@@ -58,9 +58,6 @@
 /* MAXPATHLEN */
 #include <sys/param.h>
 
-/* strlen(3) */
-#include <string.h>
-
 /* assert(3) */
 #include <assert.h>
 
@@ -70,9 +67,48 @@
 /* fnmatch(3) */
 #include <fnmatch.h>
 
+/* isblank(3) */
+#include <ctype.h>
+
+/* strtoumax(3) */
+#include <limits.h>
+#include <inttypes.h>
+
 /****************
  Helper functions
  ****************/
+
+/* Convert a char (K, M, G, ...) to a size multiplier */
+uintmax_t
+char_to_multiplier(const char c)
+{
+    uintmax_t ret = 0;
+
+    switch(c) {
+        case 'k':
+        case 'K':
+            ret = 1 << 10;
+            break;
+        case 'm':
+        case 'M':
+            ret = 1 << 20;
+            break;
+        case 'g':
+        case 'G':
+            ret = 1 << 30;
+            break;
+        case 't':
+        case 'T':
+            ret = (uintmax_t)1 << 40;
+            break;
+        case 'p':
+        case 'P':
+            ret = (uintmax_t)1 << 50;
+            break;
+    }
+
+    return (ret);
+}
 
 /* Return the number of digits necessary to print i */
 unsigned int
@@ -253,42 +289,129 @@ str_cleanup(char ***array, unsigned int *num)
     return;
 }
 
-/* Match str against array of str
-   - return 0 (no match) or 1 (match) */
+/* Check if a string begins with a '-' sign
+   - return 1 if it is the case, else 0 */
 int
-str_match(const char * const * const array, const unsigned int num,
-    const char * const str, const unsigned char ignore_case)
+str_is_negative(const char *str)
 {
     assert(str != NULL);
+
+    /* skip blanks to test first character */
+    while(isblank(*str))
+        str++;
+
+    if(*str == '-')
+        return (1);
+    else
+        return (0);
+}
+
+/* Convert a str to a uintmax > 0
+   - support human-friendly multipliers
+   - only accept values > 0 as input
+   - return 0 if an error occurs */
+uintmax_t
+str_to_uintmax(const char *str, const unsigned char handle_multiplier)
+{
+    assert(str != NULL);
+
+    char *endptr = NULL;
+    uintmax_t val = 0;
+    uintmax_t multiplier = 0;
+
+    /* check if a negative value has been provided */
+    if(str_is_negative(str))
+        return (0);
+
+    errno = 0;
+    val = strtoumax(str, &endptr, 10);
+    /* check that something was converted and refuse invalid values */
+    if((endptr == optarg) || (val == 0))
+        return (0);
+    /* check for other errors */
+    if(errno != 0) {
+        fprintf(stderr, "%s(): %s\n", __func__, strerror(errno));
+        return (0);
+    }
+    /* if characters remain, handle multiplier */
+    if(*endptr != '\0') {
+        /* return an error if we do not want to handle multiplier */
+        if(!handle_multiplier) {
+            fprintf(stderr, "%s(): %s\n", __func__, "unexpected unit provided");
+            return (0);
+        }
+
+        uintmax_t orig_val = val;
+        /* more than one character remain or invalid multiplier specified */
+        if ((*(endptr + 1) != '\0') ||
+            (multiplier = char_to_multiplier(*endptr)) == 0) {
+            fprintf(stderr, "%s(): %s\n", __func__, "unknown unit provided");
+            return (0);
+        }
+        /* check for overflow */
+        val *= multiplier;
+        if((val / multiplier) != orig_val) {
+            fprintf(stderr, "%s(): %s\n", __func__, strerror(ERANGE));
+            return (0);
+        }
+    }
+#if defined(DEBUG)
+    fprintf(stderr, "%s(): converted string %s to value %ju\n", __func__,
+        optarg, val);
+#endif
+    return (val);
+}
+
+/* Match an fts entry against an array of strings
+   - return 0 (no match) or 1 (match) */
+int
+file_match(const char * const * const array, const unsigned int num,
+    const FTSENT * const p, const unsigned char ignore_case)
+{
+    assert(p != NULL);
+    assert(p->fts_name != NULL);
+    assert(p->fts_path != NULL);
 
     if(array == NULL)
         return (0);
 
     unsigned int i = 0;
     while(i < num) {
-        if(fnmatch(array[i], str, ignore_case ? FNM_CASEFOLD : 0) == 0)
-            return(1);
+        if(strchr(array[i], '/') == NULL) {
+            /* Current string contains a file name */
+            if(fnmatch(array[i], p->fts_name, FNM_PERIOD |
+                (ignore_case ? FNM_CASEFOLD : 0)) == 0)
+                return(1);
+        }
+        else {
+            /* Current string contains a path */
+            if(fnmatch(array[i], p->fts_path, FNM_PATHNAME | FNM_PERIOD |
+                (ignore_case ? FNM_CASEFOLD : 0)) == 0)
+                return(1);
+        }
         i++;
     }
     return (0);
 }
 
-/* Validate a file name regarding program options
+/* Validate a file regarding program options
    - do not check inclusion lists for directories (we must be able to crawl
      the entire file hierarchy)
    - return 0 if file is not valid, 1 if it is */
 int
-valid_filename(char *filename, struct program_options *options,
+valid_file(const FTSENT * const p, struct program_options *options,
     unsigned char is_leaf)
 {
-    assert(filename != NULL);
+    assert(p != NULL);
+    assert(p->fts_name != NULL);
+    assert(p->fts_path != NULL);
     assert(options != NULL);
 
     int valid = 1;
 
 #if defined(DEBUG)
-    fprintf(stderr, "%s(): checking name validity for %s: %s\n", __func__,
-        is_leaf ? "leaf" : "directory", filename);
+    fprintf(stderr, "%s(): checking name validity for %s: %s (path: %s)\n", __func__,
+        is_leaf ? "leaf" : "directory", p->fts_name, p->fts_path);
 #endif
 
     /* check for includes (options -y and -Y), for leaves only */
@@ -298,24 +421,24 @@ valid_filename(char *filename, struct program_options *options,
             /* switch to default exclude, unless file found in lists */
             valid = 0;
 
-            if(str_match((const char * const * const)(options->include_files),
-                options->ninclude_files, filename, 0) ||
-                str_match((const char * const * const)(options->include_files_ci),
-                options->ninclude_files_ci, filename, 1))
+            if(file_match((const char * const * const)(options->include_files),
+                options->ninclude_files, p, 0) ||
+                file_match((const char * const * const)(options->include_files_ci),
+                options->ninclude_files_ci, p, 1))
                 valid = 1;
         }
     }
 
     /* check for excludes (options -x and -X) */
-    if(str_match((const char * const * const)(options->exclude_files),
-        options->nexclude_files, filename, 0) ||
-        str_match((const char * const * const)(options->exclude_files_ci),
-        options->nexclude_files_ci, filename, 1))
+    if(file_match((const char * const * const)(options->exclude_files),
+        options->nexclude_files, p, 0) ||
+        file_match((const char * const * const)(options->exclude_files_ci),
+        options->nexclude_files_ci, p, 1))
         valid = 0;
 
 #if defined(DEBUG)
     fprintf(stderr, "%s(): %s: %s, validity: %s\n", __func__,
-        is_leaf ? "leaf" : "directory", filename,
+        is_leaf ? "leaf" : "directory", p->fts_name,
         valid ? "valid" : "invalid");
 #endif
 
