@@ -746,13 +746,14 @@ then
         2>\"${FPART_LOGDIR}/\${FPART_PARTNUMBER}.stderr\""
 else
     FPART_JOBCOMMAND="/bin/sh -c '${OPT_CHECK} \\\"${OPT_SRCDIR}/\\\" && \
-        ${SUDO} ${TOOL_BIN} ${OPT_TOOL} \ # TODO OPT_TOOL
+        ${SUDO} ${TOOL_BIN} ${OPT_TOOL} \
         ${TOOL_MODEOPTS} --files-from=\\\"\${FPART_PARTFILENAME}\\\" --from0 \
         \\\"${OPT_SRCDIR}/\\\" \
         \\\"${OPT_DSTURL}/\\\"' \
         1>\"${FPART_LOGDIR}/\${FPART_PARTNUMBER}.stdout\" \
         2>\"${FPART_LOGDIR}/\${FPART_PARTNUMBER}.stderr\""
 fi
+echo_log "1" "run $FPART_JOBCOMMAND"
 FPART_POSTHOOK="echo \"${FPART_JOBCOMMAND}\" > \
     \"${JOBS_QUEUEDIR}/\${FPART_PARTNUMBER}\" && \
     [ ${OPT_VERBOSE} -ge 2 ] && \
