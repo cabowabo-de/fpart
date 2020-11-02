@@ -371,7 +371,7 @@ parse_opts () {
     *)
         # Rsync
         [ -z "${OPT_TOOL}" ] && \
-            OPT_TOOL="-lptgoD -v --numeric-ids --xattrs --ignore-errors ${OPT_RSYNC}"
+            OPT_TOOL="-lptgoDHX -v --numeric-ids --xattrs --ignore-errors ${OPT_RSYNC}"
         ;;
     esac
 
